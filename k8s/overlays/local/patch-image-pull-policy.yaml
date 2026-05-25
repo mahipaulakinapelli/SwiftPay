@@ -1,0 +1,6 @@
+# For local clusters, never try to pull from a remote registry — the images
+# live in the local Docker daemon (Docker Desktop K8s) or Minikube's image
+# cache (loaded via `minikube image load`).
+- op: replace
+  path: /spec/template/spec/containers/0/imagePullPolicy
+  value: Never

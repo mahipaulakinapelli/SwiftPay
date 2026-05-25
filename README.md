@@ -177,6 +177,7 @@ SwiftPay/
 ├── analytics-worker/       Read-side projection (port 8083). Own Gradle root.
 ├── docker-compose.yml      Kafka KRaft + Kafka UI + the three services (each built from its own folder)
 ├── loadtest/               k6 load test scripts + PCAP capture orchestration
+├── k8s/                    Optional Kustomize manifests (base + overlays/local)
 └── .github/workflows/      Per-service CI (path-scoped, Gradle + Docker cache)
 ```
 
@@ -234,6 +235,75 @@ EOF
 | http://localhost:8081/actuator/health        | Gateway health                         |
 | http://localhost:8082/actuator/health        | Ledger health                          |
 | http://localhost:8083/actuator/health        | Analytics health                       |
+
+---
+
+## Kubernetes — optional deployment
+
+SwiftPay also ships **Kustomize-friendly Kubernetes manifests** for deployment to a local cluster (Docker Desktop K8s, Minikube, kind). This is **additive** — it does **not** replace Docker Compose, native `bootRun`, or the GitHub Actions CI workflows.
+
+| Mode | Required? | Command |
+|---|---|---|
+| Local Gradle (`./gradlew bootRun`) | unchanged | works as documented above |
+| Docker Compose                     | unchanged | `docker compose up -d --build` |
+| GitHub Actions CI                  | unchanged | runs on every push, no cluster needed |
+| **Kubernetes (new, optional)**     | only if you want it | `kubectl apply -k k8s/overlays/local` |
+
+### Manifest layout (Kustomize)
+
+```
+k8s/
+├── base/                          # environment-agnostic manifests
+│   ├── namespace.yaml             # swiftpay namespace
+│   ├── postgres-init-configmap.yaml  # creates swiftpay_gateway / swiftpay_ledger / swiftpay_analytics
+│   ├── postgres.yaml              # StatefulSet (+ PVC) + headless Service
+│   ├── redis.yaml                 # Deployment + Service + ACL config
+│   ├── kafka.yaml                 # StatefulSet (KRaft single-node) + Service + topic-init Job
+│   ├── transaction-gateway.yaml   # Deployment + ClusterIP Service
+│   ├── ledger-service.yaml        # Deployment + ClusterIP Service
+│   ├── analytics-worker.yaml      # Deployment + ClusterIP Service
+│   └── kustomization.yaml
+└── overlays/
+    └── local/                     # patches for local clusters
+        ├── kustomization.yaml
+        ├── patch-image-pull-policy.yaml      # imagePullPolicy: Never
+        └── patch-service-nodeport-*.yaml     # NodePort 30081 / 30082 / 30083
+```
+
+### Deploy to a local cluster
+
+```bash
+# 1. Build the three images (Docker Desktop K8s reuses local images automatically;
+#    for Minikube, run `minikube image load swiftpay/<service>:0.0.1-SNAPSHOT` after each)
+docker build -t swiftpay/transaction-gateway:0.0.1-SNAPSHOT ./transaction-gateway
+docker build -t swiftpay/ledger-service:0.0.1-SNAPSHOT     ./ledger-service
+docker build -t swiftpay/analytics-worker:0.0.1-SNAPSHOT   ./analytics-worker
+
+# 2. Apply the local overlay
+kubectl apply -k k8s/overlays/local
+
+# 3. Watch pods come up
+kubectl -n swiftpay get pods -w
+
+# 4. Hit the services on NodePorts
+curl -fsS http://localhost:30081/actuator/health
+curl -fsS http://localhost:30082/actuator/health
+curl -fsS http://localhost:30083/actuator/health
+```
+
+### Tear down
+
+```bash
+kubectl delete -k k8s/overlays/local
+```
+
+### Render manifests offline (sanity check, no cluster needed)
+
+```bash
+kubectl kustomize k8s/overlays/local | less
+```
+
+Renders 16 objects: namespace, 2 ConfigMaps, 6 Services, 4 Deployments, 2 StatefulSets, 1 Job — all in the `swiftpay` namespace.
 
 ---
 

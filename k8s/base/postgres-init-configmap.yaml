@@ -1,0 +1,17 @@
+# ConfigMap with the database bootstrap script the official postgres image runs
+# on first start (/docker-entrypoint-initdb.d/*.sql).
+#
+# Mirrors what each service's application.yml expects to find on the host.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: swiftpay
+  labels:
+    app.kubernetes.io/part-of: swiftpay
+    app.kubernetes.io/component: database
+data:
+  init.sql: |
+    CREATE DATABASE swiftpay_gateway;
+    CREATE DATABASE swiftpay_ledger;
+    CREATE DATABASE swiftpay_analytics;

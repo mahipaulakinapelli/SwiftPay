@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-gateway
+  namespace: swiftpay
+  labels: { app.kubernetes.io/name: transaction-gateway, app.kubernetes.io/part-of: swiftpay }
+spec:
+  type: ClusterIP
+  selector: { app.kubernetes.io/name: transaction-gateway }
+  ports:
+    - { name: http, port: 8081, targetPort: 8081 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-gateway
+  namespace: swiftpay
+  labels: { app.kubernetes.io/name: transaction-gateway, app.kubernetes.io/part-of: swiftpay }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: transaction-gateway }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: transaction-gateway, app.kubernetes.io/part-of: swiftpay }
+    spec:
+      containers:
+        - name: transaction-gateway
+          # Built locally with `docker build ./transaction-gateway` and made
+          # available to the cluster (Docker Desktop K8s reuses the local
+          # daemon's images automatically; for Minikube use
+          # `minikube image load`).
+          image: swiftpay/transaction-gateway:0.0.1-SNAPSHOT
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { containerPort: 8081, name: http }
+          env:
+            - { name: SPRING_PROFILES_ACTIVE,    value: kubernetes }
+            - { name: SERVER_PORT,               value: "8081" }
+            - { name: KAFKA_BOOTSTRAP_SERVERS,   value: "kafka.swiftpay.svc.cluster.local:9092" }
+            - { name: POSTGRES_HOST,             value: "postgres.swiftpay.svc.cluster.local" }
+            - { name: POSTGRES_PORT,             value: "5432" }
+            - { name: POSTGRES_DB,               value: "swiftpay_gateway" }
+            - { name: POSTGRES_USER,             value: "mahipaul" }
+            - { name: POSTGRES_PASSWORD,         value: "12345678" }
+            - { name: REDIS_HOST,                value: "redis.swiftpay.svc.cluster.local" }
+            - { name: REDIS_PORT,                value: "6379" }
+            - { name: REDIS_PASSWORD,            value: "MyNewStr0ngPass!" }
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests: { memory: 384Mi, cpu: 100m  }
+            limits:   { memory: 1Gi,   cpu: 1500m }

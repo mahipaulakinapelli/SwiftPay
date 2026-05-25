@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base manifests — environment-agnostic. Apply with an overlay (e.g. overlays/local).
+#
+# Apply directly only when you want vanilla defaults:
+#   kubectl apply -k k8s/base
+#
+# Otherwise prefer:
+#   kubectl apply -k k8s/overlays/local
+
+namespace: swiftpay
+
+commonLabels:
+  app.kubernetes.io/part-of: swiftpay
+
+resources:
+  - namespace.yaml
+  - postgres-init-configmap.yaml
+  - postgres.yaml
+  - redis.yaml
+  - kafka.yaml
+  - transaction-gateway.yaml
+  - ledger-service.yaml
+  - analytics-worker.yaml

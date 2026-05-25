@@ -1,0 +1,8 @@
+# Expose the gateway on a host-accessible NodePort so curl / k6 from the host
+# can hit http://localhost:30081/v1/payments without kubectl port-forward.
+- op: replace
+  path: /spec/type
+  value: NodePort
+- op: add
+  path: /spec/ports/0/nodePort
+  value: 30081

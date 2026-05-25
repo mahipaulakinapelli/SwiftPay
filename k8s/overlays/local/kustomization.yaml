@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Local-cluster overlay (Docker Desktop K8s or Minikube).
+# Tailored for development:
+#   - imagePullPolicy: Never  so K8s uses the local-daemon images you build
+#     with `docker build` (Docker Desktop K8s reuses them automatically;
+#     for Minikube run `minikube image load swiftpay/<service>:0.0.1-SNAPSHOT`).
+#   - Service type: NodePort  for the three Spring Boot services + Kafka external
+#     listener, so host tools (curl, k6, Kafka UI) can reach them without
+#     `kubectl port-forward`.
+
+namespace: swiftpay
+
+resources:
+  - ../../base
+
+patches:
+  - path: patch-image-pull-policy.yaml
+    target:
+      kind: Deployment
+      name: transaction-gateway
+  - path: patch-image-pull-policy.yaml
+    target:
+      kind: Deployment
+      name: ledger-service
+  - path: patch-image-pull-policy.yaml
+    target:
+      kind: Deployment
+      name: analytics-worker
+
+  - path: patch-service-nodeport-gateway.yaml
+    target:
+      kind: Service
+      name: transaction-gateway
+  - path: patch-service-nodeport-ledger.yaml
+    target:
+      kind: Service
+      name: ledger-service
+  - path: patch-service-nodeport-analytics.yaml
+    target:
+      kind: Service
+      name: analytics-worker
