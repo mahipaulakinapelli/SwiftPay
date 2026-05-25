@@ -1,0 +1,114 @@
+# SwiftPay — analytics-worker CI
+#
+# Independent pipeline for this service only. Path filter scopes triggers to
+# analytics-worker changes.
+#
+# Pipeline: assemble → test + coverage → docker build (verify-only; no push).
+
+name: analytics-worker CI
+
+on:
+  push:
+    paths:
+      - 'analytics-worker/**'
+      - '.github/workflows/analytics-worker.yml'
+  pull_request:
+    paths:
+      - 'analytics-worker/**'
+      - '.github/workflows/analytics-worker.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analytics-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SERVICE_DIR: analytics-worker
+
+jobs:
+  build-test:
+    name: Build · Test · Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.SERVICE_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: ${{ env.SERVICE_DIR }}
+          cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+          gradle-home-cache-cleanup: true
+
+      - name: Assemble (compile + bootJar without running tests)
+        run: ./gradlew assemble --no-daemon
+
+      - name: Test + JaCoCo coverage
+        run: ./gradlew test jacocoTestReport --no-daemon
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-analytics-worker
+          path: ${{ env.SERVICE_DIR }}/build/test-results/test
+          retention-days: 14
+
+      - name: Upload JaCoCo HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-html-analytics-worker
+          path: ${{ env.SERVICE_DIR }}/build/reports/jacoco/test/html
+          retention-days: 14
+
+      - name: Upload JaCoCo XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-xml-analytics-worker
+          path: ${{ env.SERVICE_DIR }}/build/reports/jacoco/test/jacocoTestReport.xml
+          retention-days: 14
+
+      - name: Upload boot JAR
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analytics-worker-jar
+          path: ${{ env.SERVICE_DIR }}/build/libs/analytics-worker-*-SNAPSHOT.jar
+          retention-days: 14
+
+  docker-build:
+    name: Docker image build (verify-only)
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./analytics-worker
+          push: false
+          load: false
+          tags: swiftpay/analytics-worker:${{ github.sha }}
+          cache-from: type=gha,scope=analytics-worker
+          cache-to: type=gha,mode=max,scope=analytics-worker
