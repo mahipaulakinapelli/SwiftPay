@@ -1,0 +1,91 @@
+spring:
+  application:
+    name: transaction-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: NON_NULL
+    serialization:
+      write-dates-as-timestamps: false
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:swiftpay_gateway}
+    username: ${POSTGRES_USER:mahipaul}
+    password: ${POSTGRES_PASSWORD:12345678}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Tuned 10 → 25 to remove HTTP↔outbox-publisher pool contention under load.
+      maximum-pool-size: 25
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: myuser
+      password: ${REDIS_PASSWORD:MyNewStr0ngPass!}
+      timeout: 2000ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: ${KAFKA_GROUP_ID:transaction-gateway}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: 'com.swiftpay.gateway.event'
+    # Wire-format logical names ↔ local class FQNs are configured in
+    # KafkaProducerConfig (DefaultJackson2JavaTypeMapper). See README → "Contract ownership".
+
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+swiftpay:
+  topics:
+    payment-initiated: payment-initiated
+    payment-completed: payment-completed
+    payment-failed: payment-failed
+  outbox:
+    # Tuned for 250+ TPS throughput.
+    # Drain ceiling ≈ batch-size / poll-delay = 200 / 0.1s = 2000 events/sec.
+    poll-delay-ms: 100        # default 500
+    batch-size: 200           # default 50
+    send-timeout-ms: 5000
+    max-retry-count: 8
+    max-backoff-seconds: 300
+    rescue-delay-ms: 30000
+    stuck-publishing-threshold-seconds: 60
