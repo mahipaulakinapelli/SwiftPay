@@ -1,0 +1,10 @@
+PCAP captures land here. Files are added via loadtest/run-with-pcap.sh.
+
+A captured run looks like:
+  swiftpay-load-5min-quick-20260525-160000.pcap   ~50–200 MB
+  swiftpay-load-1M-txn-20260525-160000.pcap       ~5–15 GB
+
+Open in Wireshark, or analyse on the CLI:
+  tcpdump -r swiftpay-load-*.pcap -nn | head
+  tcpdump -r swiftpay-load-*.pcap -nn 'port 8081' | wc -l   # HTTP packets
+  tcpdump -r swiftpay-load-*.pcap -nn 'port 29092' | wc -l  # Kafka packets
