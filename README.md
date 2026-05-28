@@ -16,7 +16,7 @@ SwiftPay is three Spring Boot microservices on **Java 25** that move money the w
 | 🧱 **True poly-repo** | Each service owns its contracts. Cross-service Kafka uses logical wire names, not Java FQNs. |
 | 🐳 **One-command stack** | `docker compose up -d --build` brings up Kafka (KRaft), all three services, and Kafka UI. |
 | 🤖 **Per-service CI** | GitHub Actions per repo with path-scoped triggers, Gradle caching, and Docker layer caching. |
-| 📈 **Network evidence** | Real k6 load tests + **PCAP capture** across HTTP, Kafka, Postgres, Redis ports — 5.2 M packets captured in the validated run, see `loadtest/DRYRUN_REPORT.md`. |
+| 📈 **Network evidence** | Real k6 load tests + **PCAP capture** across HTTP, Kafka, Postgres, Redis ports — **6.4 M packets** in the validated 5-minute submission run. Download + full per-port breakdown: [v1.0-pcap-evidence release](https://github.com/mahipaulakinapelli/SwiftPay/releases/tag/v1.0-pcap-evidence) (197 MB gzip). |
 
 ---
 
@@ -104,18 +104,28 @@ SwiftPay is benchmarked with **k6** against `POST /v1/payments` and verified end
 
 ### Network evidence — PCAP capture
 
-A real `tcpdump` capture on the loopback interface during a 250 TPS run, filtered to SwiftPay's six ports, proves every component participated in the test:
+A real `tcpdump` capture on the loopback interface during a 5-minute, 250 TPS run, filtered to SwiftPay's six ports, proves every component participated in the test:
 
 | Port | Component | Packets captured |
 |---|---|---|
-| 8081 | transaction-gateway HTTP | **223 128** |
-| 29092 | Apache Kafka (external listener) | **550 968** |
-| 5432 | PostgreSQL | **4 061 530** |
-| 6379 | Redis | **375 263** |
+| 8081 | transaction-gateway HTTP | **353 754** |
+| 29092 | Apache Kafka (external listener) | **634 812** |
+| 5432 | PostgreSQL | **4 709 574** |
+| 6379 | Redis | **681 705** |
 | 8082 / 8083 | ledger / analytics HTTP | event-driven, no client-side traffic |
-| **Total** | | **5 210 889** |
+| **Total** | | **6 379 845** |
 
-Capture lives at `loadtest/pcap/swiftpay-load-*.pcap.gz` (156 MB gzip / 814 MB raw). Full per-port breakdown + analysis tips in **`loadtest/DRYRUN_REPORT.md`**.
+**Download the capture:** [v1.0-pcap-evidence release](https://github.com/mahipaulakinapelli/SwiftPay/releases/tag/v1.0-pcap-evidence) — `swiftpay-load-quick-20260528-155738.pcap.gz` (197 MB gzip / 987 MB raw, SHA-256 `eb95579b…f424fd4`). The release page has the full per-port packet breakdown, k6 metrics, DB integrity counts, and CLI verification commands.
+
+**Open in Wireshark / CLI:**
+
+```bash
+gunzip swiftpay-load-quick-20260528-155738.pcap.gz
+tcpdump -r swiftpay-load-quick-20260528-155738.pcap -nn 'port 8081' | wc -l    # 353 754  (HTTP)
+tcpdump -r swiftpay-load-quick-20260528-155738.pcap -nn 'port 29092' | wc -l   # 634 812  (Kafka)
+tcpdump -r swiftpay-load-quick-20260528-155738.pcap -nn 'port 5432' | wc -l    # 4 709 574 (Postgres)
+tcpdump -r swiftpay-load-quick-20260528-155738.pcap -nn 'port 6379' | wc -l    # 681 705  (Redis)
+```
 
 ### Reports backing the 250 TPS claim
 
@@ -123,8 +133,8 @@ Capture lives at `loadtest/pcap/swiftpay-load-*.pcap.gz` (156 MB gzip / 814 MB r
 |---|---|
 | `loadtest/reports/summary.json`  | k6 raw JSON: 57 899 iterations, 0 failures, p(99) = 8.42 ms |
 | `loadtest/reports/summary.html`  | k6 human-readable HTML summary (open in a browser) |
-| `loadtest/pcap/swiftpay-load-*.pcap.gz` | tcpdump capture of every HTTP / Kafka / Postgres / Redis packet during the run |
-| `loadtest/DRYRUN_REPORT.md`      | Per-port packet breakdown + k6 stage observations + DB state at end of run |
+| [v1.0-pcap-evidence release](https://github.com/mahipaulakinapelli/SwiftPay/releases/tag/v1.0-pcap-evidence) | tcpdump capture of every HTTP / Kafka / Postgres / Redis packet during the run (197 MB gzip, hosted as a release asset because GitHub blocks files >100 MB in normal commits) |
+| [v1.0-pcap-evidence release notes](https://github.com/mahipaulakinapelli/SwiftPay/releases/tag/v1.0-pcap-evidence) | Per-port packet breakdown + k6 stage observations + DB state at end of run |
 | `loadtest/BOTTLENECK_ANALYSIS.md` | Live 15-second-interval samples from Postgres + Kafka during the run — independent confirmation of the 250 TPS sustained rate and zero consumer lag |
 
 ### Run the tests yourself
